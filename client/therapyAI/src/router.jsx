@@ -3,10 +3,14 @@ import Signup from "./componenets/Signup";
 import Signin from "./componenets/Signin";
 import Dashboard from "./componenets/Dashboard";
 import App from "./App";
+import PrivateRoute from "./componenets/privateRoute";
 
 export const router = createBrowserRouter([
     { path: "/", element: <App /> },
     { path: "/signup", element: <Signup /> },
     { path: "/signin", element: <Signin /> },
-    { path: "/dashboard", element: <Dashboard /> },
+    { path: "/dashboard", element: 
+    <PrivateRoute>
+        <Dashboard /> 
+    </PrivateRoute> },
 ]);
