@@ -17,7 +17,10 @@ load_dotenv()
 ENVIRONMENT: str = os.getenv("ENVIRONMENT")
 
 if ENVIRONMENT == "development":
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:5173"]
+    ALLOWED_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:5174",  # Backup port
+    ]
 else:
     ALLOWED_ORIGINS: list[str] = ["production_url"]
 
