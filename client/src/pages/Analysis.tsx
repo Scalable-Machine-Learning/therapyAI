@@ -35,7 +35,12 @@ export default function Analysis() {
       setHasRunAnalysis(true);
     } catch (error: any) {
       console.error('Failed to run analysis:', error);
-      setError(error.message || `Failed to generate analysis. Please make sure you have at least one journal entry in the last ${selectedRange} day(s).`);
+      // Check if error is about not enough entries
+      if (error.message && error.message.includes('Not enough entries')) {
+        setError('Not enough Entries');
+      } else {
+        setError(error.message || `Failed to generate analysis. Please make sure you have at least one journal entry in the last ${selectedRange} day(s).`);
+      }
     } finally {
       setIsLoading(false);
     }

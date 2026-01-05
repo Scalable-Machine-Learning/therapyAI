@@ -79,6 +79,12 @@ async def analyze_entries(num_entries: int, current_user: User) -> dict[str, Any
                 detail=f"No journal entries found.",
             )
 
+        if len(response.data) < num_entries:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Not enough entries. You have {len(response.data)} entry/entries but requested analysis for {num_entries}.",
+            )
+
         entries = response.data
         # Reverse to get chronological order for display
         entries_reversed = list(reversed(entries))

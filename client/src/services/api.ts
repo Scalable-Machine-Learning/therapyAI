@@ -36,8 +36,8 @@ async function authFetch<T>(
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
-    throw new Error(error.message || 'Request failed');
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(error.detail || error.message || 'Request failed');
   }
 
   return response.json();
