@@ -360,16 +360,20 @@ export const userApi = {
 
 // Inference API
 export const inferenceApi = {
-  getMentalHealthCheckin: async (): Promise<{
+  getMentalHealthCheckin: async (days: 1 | 7 | 14 = 1): Promise<{
     success: boolean;
-    journal_entry_id: string;
-    entry_date: string;
+    period_days: number;
+    date_range: string;
+    entry_count: number;
     analysis: string;
   }> => {
-    return authFetch(
-      '/api/inference/mental-health-checkin',
-      { method: 'GET' }
-    );
+    const endpoint = {
+      1: '/api/inference/mental-health-checkin/1day',
+      7: '/api/inference/mental-health-checkin/7days',
+      14: '/api/inference/mental-health-checkin/14days',
+    }[days];
+    
+    return authFetch(endpoint, { method: 'GET' });
   },
 };
 

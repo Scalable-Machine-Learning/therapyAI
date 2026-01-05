@@ -2,10 +2,13 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Any
-from datetime import datetime
+from datetime import datetime, timedelta
 from openai import OpenAI
 import os
+import logging
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 try:
     from backend.schemas import User
@@ -28,43 +31,66 @@ async def inference_health() -> dict[str, str]:
     return {"status": "ok", "message": "Inference router is ready"}
 
 
-@router.get("/mental-health-checkin")
-async def mental_health_checkin(
-    current_user: User = Depends(get_current_user),
-) -> dict[str, Any]:
-    """
-    Perform a mental health check-in based on the user's latest journal entry.
-    Uses OpenAI to analyze the entry and provide supportive feedback.
-    """
+@router.get("/check-setup")
+async def check_setup() -> dict[str, Any]:
+    """Check if the setup is correct (for debugging)."""
+    checks = {
+        "openai_api_key_set": bool(os.getenv("OPENAI_API_KEY")),
+        "supabase_url_set": bool(os.getenv("SUPABASE_URL")),
+        "supabase_key_set": bool(os.getenv("SUPABASE_ANON_KEY")),
+    }
+    return {"checks": checks}
+
+
+@router.get("/mental-health-checkin/1day")
+async def checkin_1day(current_user: User = Depends(get_current_user)) -> dict[str, Any]:
+    """Analyze last 1 entry."""
+    return await analyze_entries(1, current_user)
+
+
+@router.get("/mental-health-checkin/7days")
+async def checkin_7days(current_user: User = Depends(get_current_user)) -> dict[str, Any]:
+    """Analyze last 7 entries."""
+    return await analyze_entries(7, current_user)
+
+
+@router.get("/mental-health-checkin/14days")
+async def checkin_14days(current_user: User = Depends(get_current_user)) -> dict[str, Any]:
+    """Analyze last 14 entries."""
+    return await analyze_entries(14, current_user)
+
+
+async def analyze_entries(num_entries: int, current_user: User) -> dict[str, Any]:
+    """Helper to analyze last N journal entries."""
     try:
-        # Fetch the latest journal entry for the user
+        # Fetch last N entries
         response = (
             supabase.table("journal_entries")
             .select("*")
             .eq("user_id", current_user.id)
             .order("created_at", desc=True)
-            .limit(1)
+            .limit(num_entries)
             .execute()
         )
 
         if not response.data:
             raise HTTPException(
                 status_code=404,
-                detail="No journal entries found. Please create one before running analysis.",
+                detail=f"No journal entries found.",
             )
 
-        latest_entry = response.data[0]
-        journal_text = latest_entry["content"]
-        entry_date = latest_entry["created_at"]
+        entries = response.data
+        # Reverse to get chronological order for display
+        entries_reversed = list(reversed(entries))
 
-        # Format the date for the prompt
-        if isinstance(entry_date, str):
-            entry_datetime = datetime.fromisoformat(entry_date.replace("Z", "+00:00"))
-        else:
-            entry_datetime = entry_date
-        formatted_date = entry_datetime.strftime("%B %d, %Y")
+        # Format entries
+        formatted_entries = "\n\n".join([
+            f"[{datetime.fromisoformat(entry['created_at'].replace('Z', '+00:00')).strftime('%B %d, %Y at %I:%M %p')}]\n{entry['content']}"
+            for entry in entries_reversed
+        ])
 
-        # Create the prompt with the journal content and date
+        date_range = f"{entries_reversed[0]['created_at'][:10]} to {entries_reversed[-1]['created_at'][:10]}"
+
         system_prompt = """You are a supportive mental-health check-in assistant.
 You are not a clinician and must not diagnose or make absolute claims.
 Base your analysis only on the journal text provided and speak in probabilities, not certainties.
@@ -72,15 +98,16 @@ Be calm, honest, and practical—no sugar-coating, no alarmism.
 
 If the journal suggests self-harm, suicidal ideation, harm to others, or inability to stay safe, explicitly say so and recommend reaching out immediately to local emergency services, a crisis hotline, or a trusted person. Keep the tone non-judgmental and supportive."""
 
-        user_prompt = f"""DATE: {formatted_date}
+        user_prompt = f"""DATE RANGE: {date_range}
+ANALYSIS PERIOD: Last {num_entries} entries
 
-TODAY'S JOURNAL (verbatim):
-{journal_text}
+JOURNAL ENTRIES (in chronological order):
+{formatted_entries}
 
-Your task: Perform a mental health check-in based on the journal.
+Your task: Perform a mental health check-in based on these journal entries.
 
 1. Emotional snapshot
-Summarize the overall emotional tone and dominant feelings.
+Summarize the overall emotional tone and dominant feelings across the entries.
 
 2. Stressors & patterns
 Identify likely stressors, recurring themes, or cognitive patterns (e.g., rumination, avoidance, pressure, isolation).
@@ -90,7 +117,7 @@ Point out potential warning signs the person should be wary of in the near term 
 If there are no major red flags, say that clearly.
 
 4. Protective factors & strengths
-Highlight anything in the journal that suggests resilience, support, insight, or healthy coping.
+Highlight anything in the journals that suggests resilience, support, insight, or healthy coping.
 
 5. Practical next steps (24–48h)
 Offer a short list of concrete, realistic actions that could help stabilize or improve their state.
@@ -101,9 +128,8 @@ Provide 3–6 open-ended questions that could help the person reflect or check i
 7. Safety note (only if needed)
 If there are safety concerns, state them plainly and include guidance to seek immediate help."""
 
-        # Call OpenAI API
         completion = openai_client.chat.completions.create(
-            model="gpt-4.5",
+            model="gpt-4-turbo",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -116,21 +142,19 @@ If there are safety concerns, state them plainly and include guidance to seek im
 
         return {
             "success": True,
-            "journal_entry_id": latest_entry["id"],
-            "entry_date": formatted_date,
+            "period_days": num_entries,
+            "date_range": date_range,
+            "entry_count": len(entries),
             "analysis": analysis_text,
         }
 
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Analysis error: {type(e).__name__}: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=500, detail=f"Failed to generate mental health check-in: {str(e)}"
+            status_code=500, detail=f"Failed to generate analysis: {str(e)}"
         )
-
-
-# TODO: Add more AI/ML endpoints here, e.g.:
 # - POST /chat - therapy chatbot conversation
 # - POST /analyze_sentiment - sentiment analysis on journal entries
 # - POST /generate_insights - weekly insights from journal data
-
