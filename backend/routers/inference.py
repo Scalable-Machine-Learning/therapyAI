@@ -64,7 +64,7 @@ async def analyze_entries(num_entries: int, current_user: User) -> dict[str, Any
     """Helper to analyze last N journal entries."""
     try:
         # Fetch last N entries
-        response = (
+        entries_response = (
             supabase.table("journal_entries")
             .select("*")
             .eq("user_id", current_user.id)
@@ -73,27 +73,52 @@ async def analyze_entries(num_entries: int, current_user: User) -> dict[str, Any
             .execute()
         )
 
-        if not response.data:
+        if not entries_response.data:
             raise HTTPException(
                 status_code=404,
                 detail=f"No journal entries found.",
             )
 
-        if len(response.data) < num_entries:
+        if len(entries_response.data) < num_entries:
             raise HTTPException(
                 status_code=400,
-                detail=f"Not enough entries. You have {len(response.data)} entry/entries but requested analysis for {num_entries}.",
+                detail=f"Not enough entries. You have {len(entries_response.data)} entry/entries but requested analysis for {num_entries}.",
             )
 
-        entries = response.data
+        entries = entries_response.data
         # Reverse to get chronological order for display
         entries_reversed = list(reversed(entries))
 
+        # Fetch user's goals (especially active and paused ones, not completed)
+        goals_response = (
+            supabase.table("goals")
+            .select("*")
+            .eq("user_id", current_user.id)
+            .neq("status", "completed")  # Get active and paused goals, exclude completed
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        goals = goals_response.data if goals_response.data else []
+        
         # Format entries
         formatted_entries = "\n\n".join([
             f"[{datetime.fromisoformat(entry['created_at'].replace('Z', '+00:00')).strftime('%B %d, %Y at %I:%M %p')}]\n{entry['content']}"
             for entry in entries_reversed
         ])
+
+        # Format goals
+        formatted_goals = ""
+        if goals:
+            goals_list = []
+            for goal in goals:
+                status_label = goal.get("status", "active").title()
+                goals_list.append(
+                    f"- {goal.get('title', 'Untitled Goal')} ({status_label}): {goal.get('body_text', 'No description')}"
+                )
+            formatted_goals = "\n".join(goals_list)
+        else:
+            formatted_goals = "No active goals set."
 
         date_range = f"{entries_reversed[0]['created_at'][:10]} to {entries_reversed[-1]['created_at'][:10]}"
 
@@ -110,7 +135,10 @@ ANALYSIS PERIOD: Last {num_entries} entries
 JOURNAL ENTRIES (in chronological order):
 {formatted_entries}
 
-Your task: Perform a mental health check-in based on these journal entries.
+USER'S ACTIVE GOALS:
+{formatted_goals}
+
+Your task: Perform a mental health check-in based on these journal entries AND analyze progress towards the user's goals.
 
 1. Emotional snapshot
 Summarize the overall emotional tone and dominant feelings across the entries.
@@ -125,13 +153,21 @@ If there are no major red flags, say that clearly.
 4. Protective factors & strengths
 Highlight anything in the journals that suggests resilience, support, insight, or healthy coping.
 
-5. Practical next steps (24–48h)
-Offer a short list of concrete, realistic actions that could help stabilize or improve their state.
+5. Goal progress analysis
+Based on the journal entries, analyze whether the person has made progress towards their stated goals. For each goal:
+   - Identify any evidence in the journal entries that relates to the goal
+   - Assess whether progress was made (positive, neutral, or setbacks)
+   - Note specific actions, behaviors, or reflections mentioned that align with or contradict the goal
+   - If no relevant evidence is found, state that clearly
+   - Provide encouragement and suggestions for how to better align journaling/actions with goal achievement
 
-6. Gentle follow-up questions
-Provide 3–6 open-ended questions that could help the person reflect or check in with themselves.
+6. Practical next steps (24–48h)
+Offer a short list of concrete, realistic actions that could help stabilize or improve their state AND support their goal progress.
 
-7. Safety note (only if needed)
+7. Gentle follow-up questions
+Provide 3–6 open-ended questions that could help the person reflect or check in with themselves, including questions about their goals.
+
+8. Safety note (only if needed)
 If there are safety concerns, state them plainly and include guidance to seek immediate help."""
 
         completion = openai_client.chat.completions.create(
@@ -151,6 +187,7 @@ If there are safety concerns, state them plainly and include guidance to seek im
             "period_days": num_entries,
             "date_range": date_range,
             "entry_count": len(entries),
+            "goals_analyzed": len(goals),
             "analysis": analysis_text,
         }
 
