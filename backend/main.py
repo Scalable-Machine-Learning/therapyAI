@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 import os
 
 try:
-    from backend.routers import journal, inference
+    from backend.routers import journal, inference, goals
 except ModuleNotFoundError:
-    from routers import journal, inference
+    from routers import journal, inference, goals
 
 
 load_dotenv()
@@ -39,6 +39,7 @@ app.add_middleware(
 # Register routers
 app.include_router(journal.router)
 app.include_router(inference.router)
+app.include_router(goals.router)
 
 
 @app.get("/")

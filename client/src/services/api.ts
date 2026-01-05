@@ -4,6 +4,7 @@
 import {
   JournalEntry,
   Goal,
+  GoalBackend,
   AnalysisResult,
   User,
   MoodType
@@ -101,41 +102,6 @@ const mockEntries: JournalEntry[] = [
   },
 ];
 
-const mockGoals: Goal[] = [
-  {
-    id: '1',
-    user_id: '1',
-    title: 'Daily Meditation Practice',
-    description: 'Meditate for at least 10 minutes every day to improve focus and reduce anxiety',
-    target_date: '2025-03-31',
-    progress: 65,
-    status: 'active',
-    created_at: '2024-11-01T00:00:00Z',
-    updated_at: '2024-12-28T00:00:00Z',
-  },
-  {
-    id: '2',
-    user_id: '1',
-    title: 'Improve Sleep Quality',
-    description: 'Establish a consistent sleep schedule and limit screen time before bed',
-    target_date: '2025-02-28',
-    progress: 40,
-    status: 'active',
-    created_at: '2024-12-01T00:00:00Z',
-    updated_at: '2024-12-27T00:00:00Z',
-  },
-  {
-    id: '3',
-    user_id: '1',
-    title: 'Weekly Social Connection',
-    description: 'Connect with at least one friend or family member each week',
-    progress: 80,
-    status: 'active',
-    created_at: '2024-10-15T00:00:00Z',
-    updated_at: '2024-12-26T00:00:00Z',
-  },
-];
-
 const mockAnalysis: AnalysisResult = {
   id: '1',
   user_id: '1',
@@ -204,7 +170,6 @@ const mockAnalysis: AnalysisResult = {
 // These simulate API calls - replace with real fetch calls when connecting to backend
 
 let entries = [...mockEntries];
-let goals = [...mockGoals];
 
 // Journal API - Connected to real backend
 export const journalApi = {
@@ -280,42 +245,113 @@ export const journalApi = {
   },
 };
 
-// Goals API
+// Helper to convert backend Goal to frontend Goal
+const mapGoalBackendToFrontend = (backendGoal: GoalBackend): Goal => {
+  return {
+    id: backendGoal.id,
+    user_id: backendGoal.user_id,
+    title: backendGoal.title,
+    description: backendGoal.body_text || '', // Map body_text to description
+    target_date: undefined, // Not in DB schema
+    progress: 0, // Not in DB schema, default to 0
+    status: backendGoal.status as 'active' | 'completed' | 'paused',
+    created_at: backendGoal.created_at,
+    updated_at: backendGoal.created_at, // Use created_at as updated_at
+  };
+};
+
+// Goals API - Connected to real backend
 export const goalsApi = {
   getGoals: async (): Promise<Goal[]> => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    return [...goals];
+    const backendGoals = await authFetch<GoalBackend[]>(
+      '/api/get_goals',
+      { method: 'GET' }
+    );
+    return backendGoals.map(mapGoalBackendToFrontend);
   },
 
   getGoal: async (id: string): Promise<Goal | null> => {
-    await new Promise(resolve => setTimeout(resolve, 200));
-    return goals.find(g => g.id === id) || null;
+    try {
+      const backendGoal = await authFetch<GoalBackend>(
+        `/api/get_goal/${id}`,
+        { method: 'GET' }
+      );
+      return mapGoalBackendToFrontend(backendGoal);
+    } catch (error: any) {
+      if (error.message?.includes('not found') || error.message?.includes('404')) {
+        return null;
+      }
+      throw error;
+    }
   },
 
   createGoal: async (data: Omit<Goal, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<Goal> => {
-    await new Promise(resolve => setTimeout(resolve, 400));
-    const newGoal: Goal = {
-      ...data,
-      id: String(Date.now()),
-      user_id: '1',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+    // Map frontend Goal to backend GoalBackend
+    const backendData = {
+      title: data.title,
+      status: data.status || 'active',
+      body_text: data.description || '', // Map description to body_text
     };
-    goals = [...goals, newGoal];
-    return newGoal;
+    
+    const backendGoal = await authFetch<GoalBackend>(
+      '/api/post_goal',
+      {
+        method: 'POST',
+        body: JSON.stringify(backendData),
+      }
+    );
+    return mapGoalBackendToFrontend(backendGoal);
   },
 
   updateGoal: async (id: string, data: Partial<Goal>): Promise<Goal> => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const index = goals.findIndex(g => g.id === id);
-    if (index === -1) throw new Error('Goal not found');
-    goals[index] = { ...goals[index], ...data, updated_at: new Date().toISOString() };
-    return goals[index];
+    // Map frontend Goal fields to backend GoalBackend fields
+    const updatePayload: {
+      goal_id: string;
+      title?: string;
+      status?: string;
+      body_text?: string;
+    } = {
+      goal_id: id,
+    };
+    
+    if (data.title !== undefined) {
+      updatePayload.title = data.title;
+    }
+    if (data.status !== undefined) {
+      updatePayload.status = data.status;
+    }
+    if (data.description !== undefined) {
+      updatePayload.body_text = data.description; // Map description to body_text
+    }
+    
+    const backendGoal = await authFetch<GoalBackend>(
+      '/api/update_goal',
+      {
+        method: 'PUT',
+        body: JSON.stringify(updatePayload),
+      }
+    );
+    
+    // Merge with frontend-only fields (target_date, progress)
+    const frontendGoal = mapGoalBackendToFrontend(backendGoal);
+    if (data.target_date !== undefined) {
+      frontendGoal.target_date = data.target_date;
+    }
+    if (data.progress !== undefined) {
+      frontendGoal.progress = data.progress;
+    }
+    
+    return frontendGoal;
   },
 
   deleteGoal: async (id: string): Promise<void> => {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    goals = goals.filter(g => g.id !== id);
+    await authFetch<{ message: string }>(
+      '/api/delete_goal',
+      {
+        method: 'DELETE',
+        body: JSON.stringify({ goal_id: id }),
+      }
+    );
   },
 };
 
