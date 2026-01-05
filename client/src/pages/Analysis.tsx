@@ -17,7 +17,7 @@ import { analysisApi } from '@/services/api';
 import { AnalysisResult, Insight } from '@/types';
 import { cn } from '@/lib/utils';
 
-type TimeRange = '7' | '14' | '30' | 'custom';
+type TimeRange = '1' | '7' | '14' | 'custom';
 
 const insightIcons = {
   pattern: TrendingUp,
@@ -35,7 +35,7 @@ export default function Analysis() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasRunAnalysis, setHasRunAnalysis] = useState(false);
-  const [selectedRange, setSelectedRange] = useState<TimeRange>('7');
+  const [selectedRange, setSelectedRange] = useState<TimeRange>('1');
 
   const runAnalysis = async () => {
     setIsLoading(true);
@@ -95,7 +95,7 @@ export default function Analysis() {
               
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <div className="flex gap-1 bg-white/10 rounded-lg p-1">
-                  {(['7', '14', '30'] as TimeRange[]).map((range) => (
+                  {(['1', '7', '14'] as TimeRange[]).map((range) => (
                     <button
                       key={range}
                       onClick={() => setSelectedRange(range)}

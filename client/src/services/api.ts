@@ -10,7 +10,7 @@ import {
 } from '@/types';
 import { supabase } from '@/lib/supabase';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // Helper to get auth token from Supabase
 const getToken = async () => {
@@ -219,7 +219,7 @@ export const journalApi = {
     since.setDate(since.getDate() - 30);
 
     const entries = await authFetch<JournalEntry[]>(
-      `/get_journal_entries?since=${since.toISOString()}`,
+      `/api/get_journal_entries?since=${since.toISOString()}`,
       { method: 'GET' }
     );
 
@@ -245,7 +245,7 @@ export const journalApi = {
   createEntry: async (data: { content: string; mood?: MoodType; tags?: string[] }): Promise<JournalEntry> => {
     // Backend only accepts content for now, mood and tags will be stored as part of content or ignored
     const entry = await authFetch<JournalEntry>(
-      '/post_journal_entry',
+      '/api/post_journal_entry',
       {
         method: 'POST',
         body: JSON.stringify({ content: data.content }),
@@ -257,7 +257,7 @@ export const journalApi = {
   updateEntry: async (id: string, data: Partial<JournalEntry>): Promise<JournalEntry> => {
     // Backend expects journal_entry_id and content
     const entry = await authFetch<JournalEntry>(
-      '/update_journal_entry',
+      '/api/update_journal_entry',
       {
         method: 'PUT',
         body: JSON.stringify({
@@ -271,7 +271,7 @@ export const journalApi = {
 
   deleteEntry: async (id: string): Promise<void> => {
     await authFetch<{ message: string }>(
-      '/delete_journal_entry',
+      '/api/delete_journal_entry',
       {
         method: 'DELETE',
         body: JSON.stringify({ journal_entry_id: id }),
@@ -355,6 +355,21 @@ export const userApi = {
   updateProfile: async (data: Partial<User>): Promise<User> => {
     await new Promise(resolve => setTimeout(resolve, 300));
     return { ...mockUser, ...data };
+  },
+};
+
+// Inference API
+export const inferenceApi = {
+  getMentalHealthCheckin: async (): Promise<{
+    success: boolean;
+    journal_entry_id: string;
+    entry_date: string;
+    analysis: string;
+  }> => {
+    return authFetch(
+      '/api/inference/mental-health-checkin',
+      { method: 'GET' }
+    );
   },
 };
 
