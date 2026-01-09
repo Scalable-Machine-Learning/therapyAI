@@ -1,66 +1,50 @@
 import { useState } from 'react';
-import { format, subDays } from 'date-fns';
+import { format } from 'date-fns';
 import { 
   Brain, 
-  TrendingUp, 
   AlertTriangle, 
-  Lightbulb, 
-  Trophy,
+  Lightbulb,
   ChevronRight,
   Loader2,
-  Sparkles
+  Sparkles,
+  AlertCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { analysisApi } from '@/services/api';
-import { AnalysisResult, Insight } from '@/types';
+import { inferenceApi } from '@/services/api';
 import { cn } from '@/lib/utils';
 
-type TimeRange = '7' | '14' | '30' | 'custom';
-
-const insightIcons = {
-  pattern: TrendingUp,
-  recommendation: Lightbulb,
-  achievement: Trophy,
-};
-
-const insightColors = {
-  pattern: 'text-primary bg-primary/10',
-  recommendation: 'text-accent-foreground bg-accent/20',
-  achievement: 'text-mood-positive bg-mood-positive/10',
-};
+type TimeRange = '1' | '7' | '14';
 
 export default function Analysis() {
-  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [entryDate, setEntryDate] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasRunAnalysis, setHasRunAnalysis] = useState(false);
-  const [selectedRange, setSelectedRange] = useState<TimeRange>('7');
+  const [error, setError] = useState<string | null>(null);
+  const [selectedRange, setSelectedRange] = useState<TimeRange>('1');
 
   const runAnalysis = async () => {
     setIsLoading(true);
+    setError(null);
     try {
-      const endDate = new Date();
-      const startDate = subDays(endDate, parseInt(selectedRange));
-      
-      const result = await analysisApi.triggerAnalysis(
-        format(startDate, 'yyyy-MM-dd'),
-        format(endDate, 'yyyy-MM-dd')
-      );
-      setAnalysis(result);
+      const result = await inferenceApi.getMentalHealthCheckin(parseInt(selectedRange) as 1 | 7 | 14);
+      setAnalysis(result.analysis);
+      setEntryDate(result.date_range);
       setHasRunAnalysis(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to run analysis:', error);
+      // Check if error is about not enough entries
+      if (error.message && error.message.includes('Not enough entries')) {
+        setError('Not enough Entries');
+      } else {
+        setError(error.message || `Failed to generate analysis. Please make sure you have at least one journal entry in the last ${selectedRange} day(s).`);
+      }
     } finally {
       setIsLoading(false);
     }
   };
-
-  const chartData = analysis?.emotional_trends.map((trend) => ({
-    date: format(new Date(trend.date), 'MMM d'),
-    score: ((trend.mood_score + 1) / 2) * 100, // Convert -1 to 1 → 0 to 100
-    emotion: trend.dominant_emotion,
-  })) || [];
 
   return (
     <AppLayout>
@@ -69,7 +53,7 @@ export default function Analysis() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-display font-semibold text-foreground">AI Analysis</h1>
-            <p className="text-muted-foreground mt-1">Discover patterns in your mental wellbeing</p>
+            <p className="text-muted-foreground mt-1">Mental health check-in for your journal entries</p>
           </div>
         </div>
 
@@ -83,19 +67,19 @@ export default function Analysis() {
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <Sparkles className="h-5 w-5" />
-                  <span className="text-sm font-medium">AI-Powered Insights</span>
+                  <span className="text-sm font-medium">AI-Powered Mental Health Check-In</span>
                 </div>
                 <h2 className="font-display text-xl font-semibold mb-2">
                   Analyze Your Journal Entries
                 </h2>
                 <p className="text-sm text-primary-foreground/80">
-                  Get personalized insights about emotional patterns, trends, and areas of focus.
+                  Get personalized, supportive feedback on your journal entries using AI analysis.
                 </p>
               </div>
               
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <div className="flex gap-1 bg-white/10 rounded-lg p-1">
-                  {(['7', '14', '30'] as TimeRange[]).map((range) => (
+                  {(['1', '7', '14'] as TimeRange[]).map((range) => (
                     <button
                       key={range}
                       onClick={() => setSelectedRange(range)}
@@ -133,110 +117,79 @@ export default function Analysis() {
           </CardContent>
         </Card>
 
+        {/* Error State */}
+        {error && (
+          <Card className="border-mood-negative/30 bg-mood-negative/5">
+            <CardContent className="p-6">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-mood-negative mt-0.5 shrink-0" />
+                <div>
+                  <h4 className="font-medium text-mood-negative mb-1">Error</h4>
+                  <p className="text-sm text-muted-foreground">{error}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Analysis Results */}
         {hasRunAnalysis && analysis && (
           <div className="space-y-6 animate-slide-up">
-            {/* Summary */}
+            {/* Header with Entry Date */}
             <Card className="shadow-elegant">
               <CardHeader>
-                <CardTitle className="font-display text-lg">Summary</CardTitle>
+                <CardTitle className="font-display text-lg flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-primary" />
+                  Mental Health Check-In
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground leading-relaxed">{analysis.summary}</p>
-                <p className="text-xs text-muted-foreground mt-3">
-                  Analysis period: {format(new Date(analysis.start_date), 'MMM d')} - {format(new Date(analysis.end_date), 'MMM d, yyyy')}
+                <p className="text-sm text-muted-foreground mb-4">
+                  Analysis for entry from <span className="font-medium text-foreground">{entryDate}</span>
                 </p>
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <div className="bg-muted/30 rounded-lg p-6 text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                    {analysis}
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
-
-            {/* Insights Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Key Insights */}
-              <Card className="shadow-elegant">
+            {/* Safety Note Alert */}
+            {analysis.toLowerCase().includes('safety') || 
+             analysis.toLowerCase().includes('self-harm') || 
+             analysis.toLowerCase().includes('suicidal') ? (
+              <Card className="border-mood-negative/30 bg-mood-negative/5">
                 <CardHeader>
                   <CardTitle className="font-display text-lg flex items-center gap-2">
-                    <Lightbulb className="h-5 w-5 text-accent" />
-                    Key Insights
+                    <AlertTriangle className="h-5 w-5 text-mood-negative" />
+                    Safety Alert
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  {analysis.insights.map((insight, index) => {
-                    const Icon = insightIcons[insight.type];
-                    return (
-                      <div 
-                        key={index}
-                        className="p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={cn(
-                            "p-2 rounded-lg shrink-0",
-                            insightColors[insight.type]
-                          )}>
-                            <Icon className="h-4 w-4" />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-medium text-foreground mb-1">
-                              {insight.title}
-                            </h4>
-                            <p className="text-xs text-muted-foreground">
-                              {insight.description}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <CardContent>
+                  <p className="text-sm text-mood-negative font-medium mb-3">
+                    Important safety concerns were identified in the analysis above.
+                  </p>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Please reach out to:
+                  </p>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex items-start gap-2">
+                      <ChevronRight className="h-4 w-4 mt-0.5 shrink-0 text-mood-negative" />
+                      <span><strong>National Suicide Prevention Lifeline:</strong> 988 (US)</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <ChevronRight className="h-4 w-4 mt-0.5 shrink-0 text-mood-negative" />
+                      <span><strong>Crisis Text Line:</strong> Text HOME to 741741</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <ChevronRight className="h-4 w-4 mt-0.5 shrink-0 text-mood-negative" />
+                      <span><strong>International Association for Suicide Prevention:</strong> https://www.iasp.info/resources/Crisis_Centres/</span>
+                    </li>
+                  </ul>
                 </CardContent>
               </Card>
-
-              {/* Areas of Concern */}
-              <Card className="shadow-elegant">
-                <CardHeader>
-                  <CardTitle className="font-display text-lg flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-mood-anxious" />
-                    Areas of Focus
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {analysis.areas_of_concern.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No significant concerns detected. Keep up the great work!
-                    </p>
-                  ) : (
-                    analysis.areas_of_concern.map((concern, index) => (
-                      <div key={index} className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className={cn(
-                            "px-2 py-0.5 text-xs rounded-full",
-                            concern.severity === 'high' 
-                              ? 'bg-mood-negative/15 text-mood-negative'
-                              : concern.severity === 'medium'
-                              ? 'bg-mood-anxious/15 text-mood-anxious'
-                              : 'bg-muted text-muted-foreground'
-                          )}>
-                            {concern.severity}
-                          </span>
-                          <h4 className="text-sm font-medium text-foreground">
-                            {concern.category}
-                          </h4>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{concern.description}</p>
-                        <ul className="space-y-1">
-                          {concern.suggested_actions.map((action, i) => (
-                            <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                              <ChevronRight className="h-3 w-3 mt-0.5 shrink-0 text-primary" />
-                              {action}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
+            ) : null}
           </div>
         )}
 
@@ -248,9 +201,13 @@ export default function Analysis() {
               <h3 className="font-display text-lg font-medium text-foreground mb-2">
                 No analysis yet
               </h3>
-              <p className="text-muted-foreground mb-4 max-w-sm mx-auto">
-                Select a time range above and run an analysis to discover patterns in your journal entries.
+              <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+                Select a time range above and click Run Analysis to receive personalized mental health insights.
               </p>
+              <Button onClick={runAnalysis}>
+                <Brain className="h-4 w-4 mr-2" />
+                Get Started
+              </Button>
             </CardContent>
           </Card>
         )}

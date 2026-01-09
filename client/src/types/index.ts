@@ -19,16 +19,27 @@ export interface JournalEntry {
   updated_at: string;
 }
 
+// Backend Goal type (matches database schema)
+export interface GoalBackend {
+  id: string;
+  user_id: string;
+  title: string;
+  body_text: string;
+  status: 'active' | 'completed' | 'paused';
+  created_at: string;
+}
+
+// Frontend Goal type (with additional fields for UI)
 export interface Goal {
   id: string;
   user_id: string;
   title: string;
-  description: string;
-  target_date?: string;
-  progress: number; // 0-100
+  description: string; // Maps to body_text from backend
+  target_date?: string; // Not in DB, optional for UI
+  progress: number; // 0-100, not in DB, defaults to 0
   status: 'active' | 'completed' | 'paused';
   created_at: string;
-  updated_at: string;
+  updated_at: string; // Uses created_at from DB
 }
 
 export interface AnalysisResult {
