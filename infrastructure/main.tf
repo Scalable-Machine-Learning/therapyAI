@@ -52,6 +52,8 @@ resource "google_compute_instance" "therapyai" {
   machine_type = var.machine_type
   zone         = var.zone
 
+  allow_stopping_for_update = true
+
   tags = ["therapyai-server"]
 
   boot_disk {
