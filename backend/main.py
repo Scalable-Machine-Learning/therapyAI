@@ -22,7 +22,10 @@ if ENVIRONMENT == "development":
         "http://localhost:5174",  # Backup port
     ]
 else:
-    ALLOWED_ORIGINS: list[str] = ["production_url"]
+    ALLOWED_ORIGINS: list[str] = [
+        "http://34.40.81.177",
+        "https://34.40.81.177",
+    ]
 
 
 app = FastAPI(title="TherapyAI API", version="0.1.0")
