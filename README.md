@@ -30,7 +30,7 @@ TherapyAI follows a modern full-stack architecture:
 
 ```
 ┌─────────────────┐
-│   React Frontend │  (Vite + TypeScript + React Router)
+│  React Frontend │  (Vite + TypeScript + React Router)
 │   (Port 5173)   │
 └────────┬────────┘
          │
@@ -38,21 +38,21 @@ TherapyAI follows a modern full-stack architecture:
          │ (Bearer Token Auth)
          ▼
 ┌─────────────────┐
-│  FastAPI Backend │  (Python 3.13 + FastAPI)
+│ FastAPI Backend │  (Python 3.13 + FastAPI)
 │   (Port 8000)   │
 └────────┬────────┘
          │
          │ Supabase Client
          ▼
 ┌─────────────────┐
-│   Supabase DB    │  (PostgreSQL + Auth)
-│  (Feature Store) │
+│  Supabase DB    │  (PostgreSQL + Auth)
+│ (Feature Store) │
 └─────────────────┘
          │
          │ OpenAI API
          ▼
 ┌─────────────────┐
-│   OpenAI GPT-4   │  (AI Analysis)
+│  OpenAI GPT-4   │  (AI Analysis)
 └─────────────────┘
 ```
 
