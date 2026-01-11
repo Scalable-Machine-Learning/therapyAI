@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+
+# Update system
+apt-get update
+apt-get upgrade -y
+
+# Install required packages
+apt-get install -y \
+    nginx \
+    certbot \
+    python3-certbot-nginx \
+    python3-pip \
+    python3-venv \
+    git \
+    curl
+
+# Install uv (fast Python package manager)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create app directories
+mkdir -p /var/www/therapyAI
+mkdir -p /opt/therapyAI
+
+# Set permissions (Sebastian is the deploy user)
+chown -R sebastian:www-data /var/www/therapyAI
+chown -R sebastian:www-data /opt/therapyAI
+chmod -R 775 /var/www/therapyAI
+chmod -R 775 /opt/therapyAI
+
+echo "Startup script completed!"
